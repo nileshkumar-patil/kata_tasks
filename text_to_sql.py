@@ -1,6 +1,7 @@
 import os
 import json
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 # Load API key from .env file
@@ -11,10 +12,10 @@ if not api_key or api_key == "your_api_key_here":
     print("ERROR: Please set a valid GEMINI_API_KEY in your .env file.")
     exit(1)
 
-genai.configure(api_key=api_key)
+client = genai.Client(api_key=api_key)
 
-# We use Gemini 1.5 Flash for speed and cost-effectiveness
-model = genai.GenerativeModel('gemini-1.5-flash')
+# Use Gemini 2.5 Flash as it is the current standard fast model
+MODEL_ID = 'gemini-2.5-flash'
 
 # 1. Mock Database Schemas
 schemas = {
@@ -52,9 +53,10 @@ Instructions:
 User Question: {user_input}
 """
     # Force the model to return JSON
-    response = model.generate_content(
-        prompt,
-        generation_config=genai.GenerationConfig(
+    response = client.models.generate_content(
+        model=MODEL_ID,
+        contents=prompt,
+        config=types.GenerateContentConfig(
             response_mime_type="application/json"
         )
     )
@@ -82,7 +84,10 @@ Instructions:
 Output format:
 SELECT ...
 """
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model=MODEL_ID,
+        contents=prompt
+    )
     
     # Clean up any potential markdown if the model disobeys instructions
     sql = response.text.strip()
@@ -107,13 +112,16 @@ if __name__ == "__main__":
         
         # Stage 1
         print("Running Stage 1 (Refinement)...")
-        stage1_result = refine_question(q)
-        print(f"  Refined Question: {stage1_result.get('refined_question')}")
-        print(f"  Target Database:  {stage1_result.get('database_name')}")
-        
-        # Stage 2
-        print("Running Stage 2 (SQL Generation)...")
-        sql_query = generate_sql(stage1_result.get('refined_question'), stage1_result.get('database_name'))
-        print("  Generated SQL:")
-        print(f"    {sql_query}")
+        try:
+            stage1_result = refine_question(q)
+            print(f"  Refined Question: {stage1_result.get('refined_question')}")
+            print(f"  Target Database:  {stage1_result.get('database_name')}")
+            
+            # Stage 2
+            print("Running Stage 2 (SQL Generation)...")
+            sql_query = generate_sql(stage1_result.get('refined_question'), stage1_result.get('database_name'))
+            print("  Generated SQL:")
+            print(f"    {sql_query}")
+        except Exception as e:
+            print(f"  Error: {e}")
         print("-" * 50)
